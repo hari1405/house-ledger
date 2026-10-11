@@ -1,12 +1,12 @@
 'use strict';
 
-const APP_VERSION = 'v2.4';
+const APP_VERSION = 'v2.5';
 
 // ---------- storage ----------
 
 const KEYS = {
   settings: 'hl.settings', config: 'hl.config', queue: 'hl.queue',
-  cache: 'hl.cache', account: 'hl.account', counts: 'hl.counts', words: 'hl.words',
+  cache: 'hl.cache', account: 'hl.account', counts: 'hl.counts', words: 'hl.words', listPot: 'hl.listPot',
 };
 const store = {
   get(k, fallback) {
@@ -33,7 +33,7 @@ const state = {
   momRange: 1,
   pending: null, // Dad's chat message waiting for a category
   chatText: '',
-  listPot: 'team', // which kanaku the Mom's-money list shows
+  listPot: store.get(KEYS.listPot, 'team'), // which kanaku the Mom's-money list shows; remembered per phone
 };
 let draft = null;
 let showAllCats = false;
@@ -915,7 +915,11 @@ function viewList() {
 
 function bindList() {
   const me = state.settings.name;
-  document.querySelectorAll('[data-pot]').forEach(b => b.onclick = () => { state.listPot = b.dataset.pot; render(); });
+  document.querySelectorAll('[data-pot]').forEach(b => b.onclick = () => {
+    state.listPot = b.dataset.pot;
+    store.set(KEYS.listPot, state.listPot);
+    render();
+  });
   document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
     const e = findEntry(b.dataset.edit);
     const mine = e && (e.logged_by === me || role() === 'admin' || (role() === 'team' && e.pot !== 'dad' && e.pot !== 'mom'));
