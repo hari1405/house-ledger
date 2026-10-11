@@ -167,3 +167,28 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); ou
 }
 .sticky-save .err:empty { display: none; }
 .sticky-save .err { margin-bottom: 6px; text-align: center; }
+
+.chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
+.bubble {
+  align-self: flex-end; max-width: 88%; text-align: right; background: var(--accent-soft); color: var(--accent-ink);
+  border-radius: 16px 16px 4px 16px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; font-size: 17px;
+}
+.bubble small { font-size: 13px; opacity: .85; }
+.bubble.in { align-self: flex-start; text-align: left; background: var(--soft); color: var(--text); border-radius: 16px 16px 16px 4px; }
+.bubble.pending { background: var(--warn-soft); color: var(--warn); }
+.chat-input {
+  position: sticky; bottom: 0; margin: auto -16px calc(-1 * max(24px, env(safe-area-inset-bottom)));
+  padding: 10px 16px max(12px, env(safe-area-inset-bottom)); background: var(--bg); box-shadow: 0 -1px 0 var(--line);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.chat-input .err:empty { display: none; }
+.chat-input .sync { margin: 0; padding: 0; }
+.send-btn { width: 64px; min-height: 54px; flex-shrink: 0; font-size: 22px; }
+button:disabled, input:disabled { opacity: .5; }
+.code-input { font-size: 32px; letter-spacing: 12px; text-align: center; min-height: 72px; }
+.code { font-size: 44px; font-weight: 650; letter-spacing: 6px; margin: 6px 0; font-variant-numeric: tabular-nums; }
+.invite-card { box-shadow: 0 0 0 2px var(--accent); }
+.chip.danger { color: var(--danger); }
+.badge.priv { background: var(--soft); color: var(--muted); }
+details summary { cursor: pointer; }
+details[open] { display: flex; flex-direction: column; gap: 6px; }

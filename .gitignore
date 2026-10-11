@@ -1,2 +1,5 @@
 dev/.keys.json
 .DS_Store
+*.csv
+*.xlsx
+apps-script/.clasp.json

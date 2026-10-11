@@ -40,9 +40,13 @@ Sheet.prototype = {
     return { getValues: () => sh.data.map(r => { const x = [...r]; while (x.length < w) x.push(''); return x; }) };
   },
   setFrozenRows() {},
+  getLastColumn() { return Math.max(0, ...this.data.map(r => r.length)); },
+  clearContents() { this.data = []; },
+  deleteRows(start, n) { this.data.splice(start - 1, n); },
 };
 
 const sheets = {};
+const props = {};
 const ss = {
   getSheetByName: n => sheets[n] || null,
   insertSheet: n => (sheets[n] = new Sheet()),
@@ -54,7 +58,12 @@ const ctx = {
   Utilities: {
     getUuid: () => require('crypto').randomUUID(),
     formatDate: d => d.toISOString().slice(0, 10),
+    DigestAlgorithm: { SHA_256: 'sha256' },
+    Charset: { UTF_8: 'utf8' },
+    // Apps Script returns signed bytes
+    computeDigest: (alg, s) => [...require('crypto').createHash(alg).update(s, 'utf8').digest()].map(b => (b > 127 ? b - 256 : b)),
   },
+  PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] ?? null, setProperty: (k, v) => { props[k] = v; } }) },
   Session: { getScriptTimeZone: () => 'Asia/Kolkata' },
   LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
   ContentService: {
@@ -65,9 +74,13 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(root, 'apps-script/Code.gs'), 'utf8'), ctx);
+const crypto = require('crypto');
+const v1Keys = { Hari: crypto.randomBytes(20).toString('hex'), Harini: crypto.randomBytes(20).toString('hex') };
+sheets.Users = new Sheet();
+sheets.Users.data = [['name', 'key'], ...Object.entries(v1Keys)];
 ctx.setup();
-console.log('Keys:', sheets.Users.data.slice(1).map(r => `${r[0]}=${r[1]}`).join('  '));
-fs.writeFileSync(path.join(__dirname, '.keys.json'), JSON.stringify(Object.fromEntries(sheets.Users.data.slice(1))));
+console.log('Users after migration:', sheets.Users.data.map(r => r.slice(0, 4).join('|')).join('  '));
+fs.writeFileSync(path.join(__dirname, '.keys.json'), JSON.stringify(v1Keys));
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png',
   '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
@@ -78,14 +91,16 @@ http.createServer((req, res) => {
     req.on('data', c => { body += c; });
     req.on('end', () => {
       const out = req.method === 'POST' ? ctx.doPost({ postData: { contents: body } }) : ctx.doGet();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      // Apps Script web apps allow any origin; mirror that so phones on other test origins work
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(out);
     });
     return;
   }
-  if (req.url === '/__dump') {
+  if (req.url.startsWith('/__dump')) {
+    const tab = new URL(req.url, 'http://x').searchParams.get('tab') || 'Transactions';
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(sheets.Transactions.data));
+    res.end(JSON.stringify(sheets[tab] ? sheets[tab].data : null));
     return;
   }
   let p = decodeURIComponent(req.url.split('?')[0]);
