@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v2.6';
+const APP_VERSION = 'v2.7';
 
 // ---------- storage ----------
 
@@ -330,6 +330,11 @@ function fixedFor(account, m) {
   return state.config.fixed.filter(f => f.account === account)
     .filter(f => f.months !== 'odd' || mo % 2 === 1)
     .filter(f => f.months !== 'even' || mo % 2 === 0);
+}
+
+/** Starting value for a per-unit fixed payment's counter (e.g. nursing days), from its typical amount. */
+function defaultCount(f) {
+  return f.typical && f.per_unit ? Math.round(f.typical / f.per_unit) : 30;
 }
 
 /** Same id on every phone for a given fixed payment and month, so two phones marking it paid make one entry. */
@@ -837,7 +842,7 @@ function viewFixed() {
       return `<button class="fixed-row done" data-edit="${esc(done.id)}"><span class="check">✓</span><span class="grow">${esc(f.name)}</span><strong>${money(done.amount)}</strong></button>`;
     }
     if (f.per_unit) {
-      const n = store.get(KEYS.counts, {})[f.name] ?? 30;
+      const n = store.get(KEYS.counts, {})[f.name] ?? defaultCount(f);
       return `<div class="card">
         <p style="margin:0;font-weight:600">${esc(f.name)}</p>
         <div class="counter">
@@ -888,7 +893,7 @@ function bindFixed() {
   app.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
     const f = list[b.dataset.idx];
     const counts = store.get(KEYS.counts, {});
-    const n = Math.max(0, Math.min(99, (counts[f.name] ?? 30) + Number(b.dataset.step)));
+    const n = Math.max(0, Math.min(99, (counts[f.name] ?? defaultCount(f)) + Number(b.dataset.step)));
     counts[f.name] = n;
     store.set(KEYS.counts, counts);
     document.getElementById(`cnt-${b.dataset.idx}`).textContent = n;
@@ -896,7 +901,7 @@ function bindFixed() {
   });
   app.querySelectorAll('[data-pay-unit]').forEach(b => b.onclick = () => {
     const f = list[b.dataset.payUnit];
-    const n = store.get(KEYS.counts, {})[f.name] ?? 30;
+    const n = store.get(KEYS.counts, {})[f.name] ?? defaultCount(f);
     if (!n) { toast(`Set the number of ${f.unit || 'units'} first`); return; }
     b.disabled = true;
     markPaid(f, n * f.per_unit, `${f.name}: ${n} ${f.unit || 'units'} × ${f.per_unit}`);

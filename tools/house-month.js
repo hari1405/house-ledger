@@ -126,12 +126,12 @@ function analyse(data, M) {
     let note = '';
     if (f.per_unit) {
       const last = cur.filter(e => fixedMatch(f, e)).pop();
-      amount = last ? Number(last.amount) : f.per_unit * 30;
-      note = last ? `same as ${monthName(M, 'short')}` : `estimated at 30 ${f.unit || 'units'}`;
+      amount = last ? Number(last.amount) : (f.typical || f.per_unit * 30);
+      note = last ? `same as ${monthName(M, 'short')}` : f.typical ? 'typical amount' : `estimated at 30 ${f.unit || 'units'}`;
     } else if (!amount) {
       const past = data.entries.filter(e => fixedMatch(f, e)).map(e => Number(e.amount));
-      amount = past.length ? ceilTo(past.reduce((a, b) => a + b, 0) / past.length, 100) : 0;
-      note = past.length ? `average of last ${past.length}` : 'no history yet';
+      amount = past.length ? ceilTo(past.reduce((a, b) => a + b, 0) / past.length, 100) : (f.typical || 0);
+      note = past.length ? `average of last ${past.length}` : f.typical ? 'typical amount, no bills yet' : 'no history yet';
     }
     return { label: f.name, amount: r2(amount), note };
   }).filter(l => l.amount > 0);

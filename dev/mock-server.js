@@ -79,6 +79,11 @@ const v1Keys = { Hari: crypto.randomBytes(20).toString('hex'), Harini: crypto.ra
 sheets.Users = new Sheet();
 sheets.Users.data = [['name', 'key'], ...Object.entries(v1Keys)];
 ctx.setup();
+if (process.env.MOCK_FROM_V3) {
+  // Simulate the live sheet as it was at schema 3 (Fixed without the "typical" column) to exercise the v4 migration
+  sheets.Fixed.data = sheets.Fixed.data.map(r => r.slice(0, 9));
+  props.schema = '3';
+}
 console.log('Users after migration:', sheets.Users.data.map(r => r.slice(0, 4).join('|')).join('  '));
 fs.writeFileSync(path.join(__dirname, '.keys.json'), JSON.stringify(v1Keys));
 

@@ -21,14 +21,15 @@
  * Actions: join (no key), config, list, save, members, invite, remove, archive_all
  */
 
-const SCHEMA = '3';
+const SCHEMA = '4';
 const TAB = { tx: 'Transactions', users: 'Users', cats: 'Categories', fixed: 'Fixed', archive: 'Archive', summaries: 'Summaries' };
 const SUMMARY_COLS = ['month', 'for_month', 'data', 'published_at', 'published_by'];
 const TX_COLS = ['id', 'date', 'account', 'type', 'amount', 'category', 'note', 'mode',
                  'paid_by_me', 'logged_by', 'created_at', 'updated_at', 'deleted', 'private', 'pot', 'sub'];
 const USER_COLS = ['name', 'role', 'key_hash', 'status', 'invite_hash', 'invite_expires', 'invite_attempts', 'joined_at'];
 const CAT_COLS = ['account', 'type', 'name', 'top', 'subs', 'sub_required', 'hint'];
-const FIXED_COLS = ['account', 'name', 'category', 'sub', 'amount', 'per_unit', 'unit', 'months', 'paid_by_me'];
+const FIXED_COLS = ['account', 'name', 'category', 'sub', 'amount', 'per_unit', 'unit', 'months', 'paid_by_me', 'typical'];
+// typical: expected monthly amount for items without a fixed amount, used for estimates until there's history
 const TEAM = ['admin', 'team'];
 const INVITE_HOURS = 24;
 const MAX_CODE_TRIES = 5;
@@ -86,6 +87,17 @@ function ensureSchema_(force) {
 
     sheet_(ss, TAB.archive, TX_COLS);
     sheet_(ss, TAB.summaries, SUMMARY_COLS);
+
+    // v4: "typical" column on Fixed, so the monthly estimate has sensible numbers before any history exists
+    if (fixed.getRange(1, 10).getValues()[0][0] !== 'typical') {
+      fixed.getRange(1, 10).setValues([['typical']]).setFontWeight('bold');
+      const typical = { 'mom|Nursing': 54000, 'mom|Electricity': 10000, 'us|Electricity': 1000, 'us|Gas': 450 };
+      const fr = fixed.getLastRow() > 1 ? fixed.getRange(2, 1, fixed.getLastRow() - 1, 2).getValues() : [];
+      fr.forEach((r, i) => {
+        const t = typical[`${r[0]}|${r[1]}`];
+        if (t) fixed.getRange(i + 2, 10).setValues([[t]]);
+      });
+    }
 
     // v3: Mama's monthly contribution gets its own "money received" category
     const catRows = rows_(cats);
@@ -147,31 +159,31 @@ function seedCategories_() {
 function seedFixed_() {
   // [account, name, category, sub, amount, per_unit, unit, months, paid_by_me]
   return [
-    ['mom', 'Nursing', 'Nursing and care staff', '', '', 900, 'days', 'all', ''],
-    ['mom', 'Mission', 'Family and giving', 'Mission', 9000, '', '', 'all', ''],
-    ['mom', 'Meera Patti', 'Family and giving', 'Meera Patti', 1000, '', '', 'all', ''],
-    ['mom', 'Internet', 'Bills', 'Internet', 1200, '', '', 'all', ''],
-    ['mom', 'Electricity', 'Bills', 'Electricity', '', '', '', 'odd', ''],
-    ['mom', 'House rent (paid by us)', 'Rent', '', 30000, '', '', 'all', 'yes'],
-    ['us', 'Rent', 'Rent', '', 25000, '', '', 'all', ''],
-    ['us', 'Rekha Aunty', 'Household help', 'Rekha Aunty', 2500, '', '', 'all', ''],
-    ['us', 'RD Harini', 'Savings and insurance', 'RD Harini', 20000, '', '', 'all', ''],
-    ['us', 'RD Hari', 'Savings and insurance', 'RD Hari', 10000, '', '', 'all', ''],
-    ['us', 'LIC Hari', 'Savings and insurance', 'LIC Hari', 10000, '', '', 'all', ''],
-    ['us', 'LIC Harini', 'Savings and insurance', 'LIC Harini', 5000, '', '', 'all', ''],
-    ['us', 'Investment', 'Savings and insurance', 'Investment', 23000, '', '', 'all', ''],
-    ['us', 'Harini', 'Family support', 'Harini', 10000, '', '', 'all', ''],
-    ['us', 'Gobi', 'Family support', 'Gobi', 10000, '', '', 'all', ''],
-    ['us', 'Dad', 'Family support', 'Dad', 5000, '', '', 'all', ''],
-    ['us', 'Patti Thatha Athai', 'Family support', 'Patti Thatha Athai', 4000, '', '', 'all', ''],
-    ['us', 'Meera Patti', 'Family support', 'Meera Patti', 1000, '', '', 'all', ''],
-    ['us', 'Mission', 'Giving', 'Mission', 1000, '', '', 'all', ''],
-    ['us', 'Orphanage', 'Giving', 'Orphanage', 1500, '', '', 'all', ''],
-    ['us', 'Wi-Fi', 'Bills', 'Wi-Fi', 1200, '', '', 'all', ''],
-    ['us', 'Mobile recharge', 'Bills', 'Mobile', 2500, '', '', 'all', ''],
-    ['us', 'Subscriptions', 'Subscriptions', '', 5230, '', '', 'all', ''],
-    ['us', 'Electricity', 'Bills', 'Electricity', '', '', '', 'all', ''],
-    ['us', 'Gas', 'Bills', 'Gas', '', '', '', 'all', ''],
+    ['mom', 'Nursing', 'Nursing and care staff', '', '', 900, 'days', 'all', '', 54000],
+    ['mom', 'Mission', 'Family and giving', 'Mission', 9000, '', '', 'all', '', ''],
+    ['mom', 'Meera Patti', 'Family and giving', 'Meera Patti', 1000, '', '', 'all', '', ''],
+    ['mom', 'Internet', 'Bills', 'Internet', 1200, '', '', 'all', '', ''],
+    ['mom', 'Electricity', 'Bills', 'Electricity', '', '', '', 'odd', '', 10000],
+    ['mom', 'House rent (paid by us)', 'Rent', '', 30000, '', '', 'all', 'yes', ''],
+    ['us', 'Rent', 'Rent', '', 25000, '', '', 'all', '', ''],
+    ['us', 'Rekha Aunty', 'Household help', 'Rekha Aunty', 2500, '', '', 'all', '', ''],
+    ['us', 'RD Harini', 'Savings and insurance', 'RD Harini', 20000, '', '', 'all', '', ''],
+    ['us', 'RD Hari', 'Savings and insurance', 'RD Hari', 10000, '', '', 'all', '', ''],
+    ['us', 'LIC Hari', 'Savings and insurance', 'LIC Hari', 10000, '', '', 'all', '', ''],
+    ['us', 'LIC Harini', 'Savings and insurance', 'LIC Harini', 5000, '', '', 'all', '', ''],
+    ['us', 'Investment', 'Savings and insurance', 'Investment', 23000, '', '', 'all', '', ''],
+    ['us', 'Harini', 'Family support', 'Harini', 10000, '', '', 'all', '', ''],
+    ['us', 'Gobi', 'Family support', 'Gobi', 10000, '', '', 'all', '', ''],
+    ['us', 'Dad', 'Family support', 'Dad', 5000, '', '', 'all', '', ''],
+    ['us', 'Patti Thatha Athai', 'Family support', 'Patti Thatha Athai', 4000, '', '', 'all', '', ''],
+    ['us', 'Meera Patti', 'Family support', 'Meera Patti', 1000, '', '', 'all', '', ''],
+    ['us', 'Mission', 'Giving', 'Mission', 1000, '', '', 'all', '', ''],
+    ['us', 'Orphanage', 'Giving', 'Orphanage', 1500, '', '', 'all', '', ''],
+    ['us', 'Wi-Fi', 'Bills', 'Wi-Fi', 1200, '', '', 'all', '', ''],
+    ['us', 'Mobile recharge', 'Bills', 'Mobile', 2500, '', '', 'all', '', ''],
+    ['us', 'Subscriptions', 'Subscriptions', '', 5230, '', '', 'all', '', ''],
+    ['us', 'Electricity', 'Bills', 'Electricity', '', '', '', 'all', '', 1000],
+    ['us', 'Gas', 'Bills', 'Gas', '', '', '', 'all', '', 450],
   ];
 }
 
@@ -331,7 +343,7 @@ function config_(user) {
     }));
   const fixed = team ? rows_(sheetOf_(TAB.fixed)).map(r => ({
     account: r.account, name: String(r.name), category: String(r.category), sub: String(r.sub || ''),
-    amount: Number(r.amount) || 0, per_unit: Number(r.per_unit) || 0, unit: String(r.unit || ''),
+    amount: Number(r.amount) || 0, per_unit: Number(r.per_unit) || 0, unit: String(r.unit || ''), typical: Number(r.typical) || 0,
     months: r.months || 'all', paid_by_me: r.paid_by_me === 'yes',
   })) : [];
   return { categories: cats, fixed };
