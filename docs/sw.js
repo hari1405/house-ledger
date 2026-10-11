@@ -1,5 +1,5 @@
 // Bump VERSION whenever app files change so phones pick up the new build.
-const VERSION = 'hl-v3';
+const VERSION = 'hl-v4';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
                'icons/icon-192.png', 'icons/icon-512.png'];
 
@@ -14,11 +14,13 @@ self.addEventListener('activate', e => {
 });
 
 // App shell: network first (so updates land), cache as offline fallback. Sheet API calls are never cached.
+// cache: 'no-cache' revalidates with GitHub Pages every time instead of trusting its 10-minute max-age,
+// so a new deploy shows up on the next open (an unchanged file costs only a 304).
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(res => {
         const copy = res.clone();
         caches.open(VERSION).then(c => c.put(e.request, copy));
