@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v2.2';
+const APP_VERSION = 'v2.3';
 
 // ---------- storage ----------
 
@@ -285,7 +285,7 @@ function balanceLine(left, whoOwes) {
 function viewJoin() {
   const p = params();
   return `
-    <div class="bar"><h1>Join House Ledger</h1></div>
+    <div class="bar"><h1>Join Kutti Krishna House</h1></div>
     <div class="card">
       <p class="label">Joining as</p>
       <p style="margin:0;font-size:24px;font-weight:600">${esc(p.n || '')}</p>
@@ -331,7 +331,7 @@ function bindJoin() {
 
 function viewSetup() {
   return `
-    <div class="bar"><h1>House Ledger</h1></div>
+    <div class="bar"><h1>Kutti Krishna House</h1></div>
     <div class="card">
       <p style="margin:0 0 6px;font-size:18px;font-weight:600">Open your invite link</p>
       <p class="label">Hari will send you a link on WhatsApp and tell you a 6-digit code on a call. Open the link on this phone to join.</p>
@@ -436,7 +436,7 @@ function viewHome() {
   const fixedDone = fixed.filter(f => fixedEntry(f, m)).length;
   const count = monthData(m).entries.filter(e => e.account === state.account).length;
   return `
-    ${topBar('House Ledger')}
+    ${topBar('Kutti Krishna House')}
     ${accountSwitch()}
     ${monthNav()}
     ${card}
@@ -469,7 +469,7 @@ function viewMomHome() {
   const dad = potSummary('dad', state.month);
   const hint = n => catInfo('mom', 'out', n)?.hint || '';
   return `
-    ${topBar('House Ledger')}
+    ${topBar('Kutti Krishna House')}
     ${monthNav()}
     <div class="row-chips" role="group" aria-label="Period">
       <button class="chip" data-range="1" aria-pressed="${state.momRange === 1}">This month</button>
@@ -892,7 +892,7 @@ function viewSettings() {
     <button class="btn btn-outline" id="sync-now">Save waiting entries now</button>
     ${s.role === 'admin' ? '<button class="btn btn-danger" id="fresh">Start fresh (archive all entries)</button>' : ''}
     <button class="btn btn-danger" id="signout">Disconnect this phone</button>
-    <p class="sync">House Ledger ${APP_VERSION}</p>`;
+    <p class="sync">Kutti Krishna House ${APP_VERSION}</p>`;
 }
 
 function bindSettings() {
@@ -993,7 +993,7 @@ function bindFamily() {
     try { await api('remove', { name: b.dataset.remove }); toast('Removed'); refreshMembers(); } catch (e) { toast(e.message); }
   });
   const share = document.getElementById('share-link');
-  if (share) share.onclick = () => shareText(`Join our House Ledger: ${inviteLink(state.lastInvite.name)}\nI'll tell you the code on a call.`);
+  if (share) share.onclick = () => shareText(`Join Kutti Krishna House: ${inviteLink(state.lastInvite.name)}\nI'll tell you the code on a call.`);
   const copy = document.getElementById('copy-link');
   if (copy) copy.onclick = () => copyText(inviteLink(state.lastInvite.name));
 }

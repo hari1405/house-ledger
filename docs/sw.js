@@ -1,5 +1,5 @@
 // Bump VERSION whenever app files change so phones pick up the new build.
-const VERSION = 'hl-v4';
+const VERSION = 'hl-v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
                'icons/icon-192.png', 'icons/icon-512.png'];
 
