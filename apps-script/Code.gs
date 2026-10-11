@@ -21,8 +21,9 @@
  * Actions: join (no key), config, list, save, members, invite, remove, archive_all
  */
 
-const SCHEMA = '2';
-const TAB = { tx: 'Transactions', users: 'Users', cats: 'Categories', fixed: 'Fixed', archive: 'Archive' };
+const SCHEMA = '3';
+const TAB = { tx: 'Transactions', users: 'Users', cats: 'Categories', fixed: 'Fixed', archive: 'Archive', summaries: 'Summaries' };
+const SUMMARY_COLS = ['month', 'for_month', 'data', 'published_at', 'published_by'];
 const TX_COLS = ['id', 'date', 'account', 'type', 'amount', 'category', 'note', 'mode',
                  'paid_by_me', 'logged_by', 'created_at', 'updated_at', 'deleted', 'private', 'pot', 'sub'];
 const USER_COLS = ['name', 'role', 'key_hash', 'status', 'invite_hash', 'invite_expires', 'invite_attempts', 'joined_at'];
@@ -84,6 +85,13 @@ function ensureSchema_(force) {
     }
 
     sheet_(ss, TAB.archive, TX_COLS);
+    sheet_(ss, TAB.summaries, SUMMARY_COLS);
+
+    // v3: Mama's monthly contribution gets its own "money received" category
+    const catRows = rows_(cats);
+    if (!catRows.some(r => r.account === 'mom' && r.type === 'in' && r.name === 'From Mama')) {
+      cats.getRange(cats.getLastRow() + 1, 1, 1, CAT_COLS.length).setValues([['mom', 'in', 'From Mama', 'yes', '', '', 'Seshadri Mama']]);
+    }
 
     const blank = ss.getSheetByName('Sheet1');
     if (blank && blank.getLastRow() === 0) ss.deleteSheet(blank);
@@ -196,6 +204,9 @@ function doPost(e) {
       case 'invite':  return json_(admin ? { ok: true, ...invite_(req.name, req.role) } : denied_());
       case 'remove':  return json_(admin ? { ok: true, ...remove_(req.name, user) } : denied_());
       case 'archive_all': return json_(admin ? { ok: true, archived: archiveAll_() } : denied_());
+      case 'export':  return json_(TEAM.includes(user.role) ? { ok: true, ...export_(req.from, req.to, user) } : denied_());
+      case 'publish_summary': return json_(TEAM.includes(user.role) ? { ok: true, ...publishSummary_(req.summary, user) } : denied_());
+      case 'summary': return json_({ ok: true, summary: summary_(req.month, user) });
       default:        return json_({ ok: false, error: 'Unknown action' });
     }
   } catch (err) {
@@ -405,6 +416,65 @@ function canEdit_(user, loggedBy, roles) {
 
 function potFor_(role) {
   return TEAM.includes(role) ? 'team' : role;
+}
+
+/** All entries in a month range plus each pot's balance carried into the first month (team only). */
+function export_(from, to, user) {
+  if (!/^\d{4}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}$/.test(to || '') || from > to) throw new Error('from/to must be YYYY-MM');
+  const all = rows_(sheetOf_(TAB.tx))
+    .filter(r => r.deleted !== true && r.deleted !== 'TRUE')
+    .map(clean_)
+    .filter(r => visible_(r, user));
+  const carry = { team: 0, dad: 0 };
+  const entries = [];
+  all.forEach(r => {
+    const m = r.date.slice(0, 7);
+    if (m >= from && m <= to) entries.push(r);
+    else if (m < from && r.account === 'mom' && r.pot in carry) {
+      if (r.type === 'in') carry[r.pot] += r.amount;
+      else if (!r.paid_by_me) carry[r.pot] -= r.amount;
+    }
+  });
+  Object.keys(carry).forEach(p => { carry[p] = Math.round(carry[p] * 100) / 100; });
+  entries.sort((a, b) => (a.date + a.created_at).localeCompare(b.date + b.created_at));
+  return { from, to, carry, entries, config: config_(user) };
+}
+
+/** Store the monthly summary Mom sees (replaces an earlier one for the same month). */
+function publishSummary_(summary, user) {
+  if (!summary || !/^\d{4}-\d{2}$/.test(summary.month || '') || !/^\d{4}-\d{2}$/.test(summary.for_month || '')) {
+    throw new Error('summary needs month and for_month');
+  }
+  const data = JSON.stringify(summary);
+  if (data.length > 45000) throw new Error('summary too large');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheetOf_(TAB.summaries);
+    const values = sh.getDataRange().getValues();
+    const idx = values.findIndex((r, i) => i > 0 && String(r[0]) === summary.month);
+    const row = [summary.month, summary.for_month, data, new Date().toISOString(), user.name];
+    if (idx > 0) sh.getRange(idx + 1, 1, 1, SUMMARY_COLS.length).setValues([row]);
+    else sh.getRange(sh.getLastRow() + 1, 1, 1, SUMMARY_COLS.length).setValues([row]);
+    return { month: summary.month };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Latest published summary (or a given month). Dad gets only his own part. */
+function summary_(month, user) {
+  const rows = rows_(sheetOf_(TAB.summaries))
+    .map(r => ({ month: String(r.month), data: String(r.data), published_at: String(r.published_at) }))
+    .filter(r => !month || r.month === month)
+    .sort((a, b) => b.month.localeCompare(a.month));
+  if (!rows.length) return null;
+  const s = JSON.parse(rows[0].data);
+  s.published_at = rows[0].published_at;
+  if (user.role === 'dad') {
+    return { month: s.month, for_month: s.for_month, published_at: s.published_at, pots: { dad: s.pots && s.pots.dad } };
+  }
+  return s;
 }
 
 function archiveAll_() {

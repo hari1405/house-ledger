@@ -201,3 +201,16 @@ button:disabled, input:disabled { opacity: .5; }
 .badge.priv { background: var(--soft); color: var(--muted); }
 details summary { cursor: pointer; }
 details[open] { display: flex; flex-direction: column; gap: 6px; }
+
+.cheque-card { display: flex; flex-direction: column; gap: 6px; text-align: left; width: 100%; box-shadow: 0 0 0 2px var(--accent); }
+.cheque-amt { font-size: 32px; font-weight: 650; color: var(--accent-ink); }
+.cheque-row { display: flex; justify-content: space-between; font-size: 18px; }
+.cheque-row strong { font-size: 22px; }
+.cheque-row.total { border-top: 1px solid var(--line); padding-top: 6px; color: var(--muted); font-size: 16px; }
+.cheque-row.total strong { font-size: 18px; color: var(--text); }
+.note-line { display: block; width: 100%; text-align: left; font-size: 14px; color: var(--accent-ink); background: var(--accent-soft); border-radius: 10px; padding: 8px 10px; margin-top: 10px; }
+.step { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+.step span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.step.total { font-weight: 650; border-bottom: 0; font-size: 18px; }
+.step.small { font-size: 14px; color: var(--muted); }
+.note { margin: 4px 0; font-size: 15px; }

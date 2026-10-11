@@ -1,12 +1,12 @@
 'use strict';
 
-const APP_VERSION = 'v2.5';
+const APP_VERSION = 'v2.6';
 
 // ---------- storage ----------
 
 const KEYS = {
   settings: 'hl.settings', config: 'hl.config', queue: 'hl.queue',
-  cache: 'hl.cache', account: 'hl.account', counts: 'hl.counts', words: 'hl.words', listPot: 'hl.listPot',
+  cache: 'hl.cache', account: 'hl.account', counts: 'hl.counts', words: 'hl.words', listPot: 'hl.listPot', summary: 'hl.summary',
 };
 const store = {
   get(k, fallback) {
@@ -33,6 +33,7 @@ const state = {
   momRange: 1,
   pending: null, // Dad's chat message waiting for a category
   chatText: '',
+  summary: store.get(KEYS.summary, null), // latest monthly close published by Hari
   listPot: store.get(KEYS.listPot, 'team'), // which kanaku the Mom's-money list shows; remembered per phone
 };
 let draft = null;
@@ -205,6 +206,74 @@ async function loadMonth(m, quiet = false) {
     if (err.message === 'Invalid key') disconnected();
     if (!quiet) renderSync();
   }
+}
+
+async function loadSummary() {
+  try {
+    const data = await api('summary');
+    state.summary = data.summary;
+    store.set(KEYS.summary, state.summary);
+    if (['home', 'summary'].includes(route())) render();
+  } catch { /* keep the cached one */ }
+}
+
+/** Card with the cheques Mom should write, from the latest published close. */
+function chequeCard() {
+  const s = state.summary;
+  if (!s || !s.pots) return '';
+  const forM = monthLabel(s.for_month).split(' ')[0];
+  if (role() === 'dad') {
+    const d = s.pots.dad;
+    if (!d) return '';
+    return `<button class="card cheque-card" data-go="#/summary">
+      <span class="label">Amma's cheque for ${forM}</span>
+      <span class="cheque-amt">${money(d.cheque)}</span>
+      <span class="label">See how it was worked out ›</span>
+    </button>`;
+  }
+  const t = s.pots.team, d = s.pots.dad;
+  if (role() !== 'mom') {
+    return `<button class="note-line" data-go="#/summary">${forM} cheques published: ${money(t.cheque)} to you, ${money(d.cheque)} to Appa ›</button>`;
+  }
+  return `<button class="card cheque-card" data-go="#/summary">
+    <span class="label">Cheques for ${forM}</span>
+    <span class="cheque-row"><span>To Hari</span><strong>${money(t.cheque)}</strong></span>
+    <span class="cheque-row"><span>To Appa</span><strong>${money(d.cheque)}</strong></span>
+    <span class="cheque-row total"><span>Total</span><strong>${money(s.total_cheque)}</strong></span>
+    <span class="label">See how this was worked out ›</span>
+  </button>`;
+}
+
+function viewSummary() {
+  const s = state.summary;
+  if (!s) {
+    return `<div class="bar"><button class="icon-btn" data-back aria-label="Back">←</button><h1>Monthly summary</h1></div>
+      <p class="empty-state">Hari hasn't closed a month yet.</p>`;
+  }
+  const M = monthLabel(s.month).split(' ')[0];
+  const forM = monthLabel(s.for_month).split(' ')[0];
+  const steps = p => p.steps.map(x => `<div class="step"><span>${esc(x.label)}</span><span>${x.amount < 0 ? '−' : '+'}${money(Math.abs(x.amount))}</span></div>`).join('');
+  const potCard = (p, to) => `<div class="card">
+      <p class="label">Cheque to ${to}</p>
+      <p class="big-num">${money(p.cheque)}</p>
+      ${steps(p)}
+      <div class="step total"><span>Cheque</span><span>${money(p.cheque)}</span></div>
+      ${p.estimate_lines ? `<details><summary class="label">What the ${forM} estimate covers</summary>
+        ${p.estimate_lines.map(l => `<div class="step small"><span>${esc(l.label)}</span><span>${money(l.amount)}</span></div>`).join('')}</details>` : ''}
+    </div>`;
+  const t = s.pots.team, d = s.pots.dad;
+  return `
+    <div class="bar"><button class="icon-btn" data-back aria-label="Back">←</button><h1>${M} summary</h1></div>
+    ${role() === 'dad' ? '' : potCard(t, 'Hari')}
+    ${d ? potCard(d, 'Appa') : ''}
+    ${role() === 'dad' ? '' : `
+    <div class="card">
+      <p class="label">Spent on the house in ${M}</p>
+      <p class="big-num">${money(s.total_spent)}</p>
+      ${s.categories.map(c => `<div class="step"><span>${esc(c.name)}</span><span>${money(c.amount)}</span></div>`).join('')}
+    </div>
+    ${s.notes && s.notes.length ? `<div class="card">${s.notes.map(n => `<p class="note">${esc(n)}</p>`).join('')}</div>` : ''}`}
+    <p class="sync">Published by Hari${s.published_at ? ` on ${new Date(s.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}</p>`;
 }
 
 async function loadConfig() {
@@ -422,6 +491,7 @@ function viewHome() {
       <div class="meter ${owed ? 'over' : ''}"><div style="width:${pct}%"></div></div>
       <p class="label">${s.carry ? `Brought forward ${s.carry < 0 ? '−' : ''}${money(s.carry)} · ` : ''}In ${money(s.received)} · Spent ${money(s.spent)}</p>
       ${s.covered ? `<p class="note-good">You covered ${money(s.covered)} for the house</p>` : ''}
+      ${chequeCard()}
       ${dad.count ? `<p class="label" style="margin-top:8px">Appa spent ${money(dad.spent)} · ${dad.left < 0 ? `Mom owes him ${money(dad.left)}` : `${money(dad.left)} with him`}</p>` : ''}
     </div>`;
   } else {
@@ -471,6 +541,7 @@ function viewMomHome() {
   const hint = n => catInfo('mom', 'out', n)?.hint || '';
   return `
     ${topBar('Kutti Krishna House')}
+    ${chequeCard()}
     ${monthNav()}
     <div class="row-chips" role="group" aria-label="Period">
       <button class="chip" data-range="1" aria-pressed="${state.momRange === 1}">This month</button>
@@ -546,6 +617,7 @@ function viewDadHome() {
   }
   return `
     ${topBar('Kanaku')}
+    ${state.pending ? '' : chequeCard()}
     ${monthNav()}
     <div class="stats">
       <div class="stat"><span class="label">Spent</span><strong>${money(s.spent)}</strong></div>
@@ -1078,7 +1150,7 @@ function render() {
     join: [viewJoin, bindJoin], setup: [viewSetup, bindSetup],
     home: [viewHome, () => (role() === 'mom' ? bindMomHome() : role() === 'dad' ? bindDadHome() : null)],
     add: [viewAdd, bindAdd], fixed: [viewFixed, bindFixed], list: [viewList, bindList],
-    settings: [viewSettings, bindSettings], family: [viewFamily, bindFamily],
+    settings: [viewSettings, bindSettings], family: [viewFamily, bindFamily], summary: [viewSummary],
   };
   let [view, bind] = views[r] || views.home;
   if ((r === 'fixed' && !isTeam()) || (r === 'family' && role() !== 'admin')) [view, bind] = views.home;
@@ -1126,6 +1198,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.settings) {
     flush();
     loadMonth(state.month, true);
+    loadSummary();
   }
 });
 
@@ -1138,4 +1211,5 @@ if (state.settings) {
   flush();
   loadMonth(state.month, true);
   loadConfig();
+  loadSummary();
 }

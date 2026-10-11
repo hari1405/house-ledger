@@ -3,3 +3,4 @@ dev/.keys.json
 *.csv
 *.xlsx
 apps-script/.clasp.json
+reports/
