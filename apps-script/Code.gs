@@ -12,7 +12,7 @@
  *   admin  Hari: everything, plus family management
  *   team   Harini: everything except family management
  *   mom    Mom's money only (including private entries); no "Us"
- *   dad    Mom's money only, never private entries; balances only for his own kanaku
+ *   dad    only entries between Dad and Mom (his kanaku, Mom's own non-private ones)
  *
  * Each entry in Mom's account belongs to a "pot" (whose kanaku it is), set from the
  * logger's role: team (Hari and Harini), dad, or mom (her own spending, no balance).
@@ -329,7 +329,8 @@ function config_(user) {
 function visible_(r, user) {
   if (TEAM.includes(user.role)) return true;
   if (r.account !== 'mom') return false;
-  return !(user.role === 'dad' && r.private);
+  if (user.role === 'dad') return r.pot === 'dad' || (r.pot === 'mom' && !r.private); // only Dad-and-Mom entries
+  return true;
 }
 
 /** Entries for one month (YYYY-MM) plus each pot's carried-forward balance before that month. */

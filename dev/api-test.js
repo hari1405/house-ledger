@@ -11,7 +11,7 @@ const check = (name, cond, extra = '') => {
   if (cond) pass++; else fail++;
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${cond ? '' : '  ' + JSON.stringify(extra)}`);
 };
-const id = s => `t${s}`.padEnd(10, '0');
+const id = s => `t${String(s).padStart(3, '0')}`.padEnd(10, 'x');
 const e = (i, o) => ({ id: id(i), date: '2026-11-03', account: 'mom', type: 'out', amount: 100, category: 'Medicines', ...o });
 
 (async () => {
@@ -73,8 +73,8 @@ const e = (i, o) => ({ id: id(i), date: '2026-11-03', account: 'mom', type: 'out
   check('Dad saves 2 entries', r.ok, r);
   r = await call({ key: dad.key, action: 'save', entries: [e(8, { account: 'us', category: 'Baby' })] });
   check('Dad cannot write to Us', !r.ok, r);
-  r = await call({ key: mom.key, action: 'save', entries: [e(9, { amount: 300, category: 'Medicines', private: true })] });
-  check('Mom saves a private entry', r.ok, r);
+  r = await call({ key: mom.key, action: 'save', entries: [e(9, { amount: 300, category: 'Medicines', private: true }), e(10, { amount: 200, category: 'Medicines' })] });
+  check('Mom saves a private and a normal entry', r.ok, r);
   r = await call({ key: dad.key, action: 'save', entries: [e(2, { amount: 1 })] });
   check("Dad cannot edit Hari's entry", !r.ok && /own entries/.test(r.error), r);
   r = await call({ key: harini, action: 'save', entries: [e(2, { amount: 55000, category: 'Nursing and care staff' })] });
@@ -87,7 +87,7 @@ const e = (i, o) => ({ id: id(i), date: '2026-11-03', account: 'mom', type: 'out
   const dadView = await L(dad.key);
   const ids = x => x.entries.map(v => v.id).sort().join(',');
   check('Dad sees no private and no Us', !dadView.entries.some(v => v.private || v.account === 'us'), dadView.entries);
-  check('Dad sees his entries + team non-private', ids(dadView) === [id(1), id(2), id(4), id(6), id(7)].sort().join(','), ids(dadView));
+  check("Dad sees only his + Mom's non-private entries", ids(dadView) === [id(6), id(7), id(10)].sort().join(','), ids(dadView));
   const dadOwn = dadView.entries.find(v => v.id === id(7));
   check("Dad's entry: pot dad, private and paid_by_me stripped", dadOwn.pot === 'dad' && !dadOwn.private && !dadOwn.paid_by_me, dadOwn);
   check('Dad gets only his own carry', Object.keys(dadView.carry).join() === 'dad', dadView.carry);
@@ -95,7 +95,7 @@ const e = (i, o) => ({ id: id(i), date: '2026-11-03', account: 'mom', type: 'out
   check('Mom sees private, not Us', momView.entries.some(v => v.private) && !momView.entries.some(v => v.account === 'us'));
   check('Mom gets team + dad carry', 'team' in momView.carry && 'dad' in momView.carry);
   const teamView = await L(harini);
-  check('Harini sees everything incl. Us', teamView.entries.length === 8, teamView.entries.length);
+  check('Harini sees everything incl. Us', teamView.entries.length === 9, teamView.entries.length);
 
   // carry into December: team = 75000 - 55000 - 2500 (private counts) - 900 (Oct) ; rent paid_by_me excluded; dad = 5000 - 450
   const dec = await L(hari, '2026-12');
@@ -116,7 +116,7 @@ const e = (i, o) => ({ id: id(i), date: '2026-11-03', account: 'mom', type: 'out
   r = await call({ key: harini, action: 'archive_all' });
   check('team cannot archive', !r.ok, r);
   r = await call({ key: hari, action: 'archive_all' });
-  check('archive moves all rows', r.ok && r.archived === 9, r);
+  check('archive moves all rows', r.ok && r.archived === 10, r);
   check('after archive, list is empty', (await L(hari)).entries.length === 0);
 
   console.log(`\n${pass} passed, ${fail} failed`);
