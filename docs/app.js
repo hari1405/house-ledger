@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v2';
+const APP_VERSION = 'v2.1';
 
 // ---------- storage ----------
 
@@ -36,6 +36,7 @@ const state = {
 };
 let draft = null;
 let showAllCats = false;
+const loadedAt = {}; // month -> when it was last fetched from the sheet
 
 const role = () => state.settings?.role || 'admin';
 const isTeam = () => ['admin', 'team'].includes(role());
@@ -195,6 +196,7 @@ async function loadMonth(m, quiet = false) {
     const pending = state.queue.filter(e => e.date.slice(0, 7) === m && !e.deleted);
     state.cache[m] = { carry: data.carry || {}, entries: sortEntries(data.entries.filter(e => !pendingIds.has(e.id)).concat(pending)) };
     store.set(KEYS.cache, state.cache);
+    loadedAt[m] = Date.now();
     state.lastError = '';
     if (state.month === m || (role() === 'mom' && state.momRange > 1)) render();
   } catch (err) {
@@ -260,9 +262,18 @@ function fixedFor(account, m) {
     .filter(f => f.months !== 'even' || mo % 2 === 0);
 }
 
+/** Same id on every phone for a given fixed payment and month, so two phones marking it paid make one entry. */
+function fixedId(f, m) {
+  let slug = f.name.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  if (!slug) slug = [...f.name].reduce((h, c) => ((h * 31 + c.codePointAt(0)) >>> 0), 7).toString(36);
+  return `fx-${f.account}-${m}-${slug}`;
+}
+
 function fixedEntry(f, m) {
-  return monthData(m).entries.find(e => e.account === f.account && e.type === 'out'
-    && e.category === f.category && (!f.sub || e.sub === f.sub));
+  const list = monthData(m).entries.filter(e => e.account === f.account && e.type === 'out');
+  return list.find(e => e.id === fixedId(f, m))
+    || list.find(e => e.category === f.category && (!f.sub || e.sub === f.sub))
+    || list.find(e => e.category === f.name); // entries logged before the v2 categories
 }
 
 function balanceLine(left, whoOwes) {
@@ -783,11 +794,23 @@ function bindFixed() {
     id: newId(), account: f.account, type: 'out', category: f.category, sub: f.sub, note: f.name,
     mode: 'upi', paid_by_me: f.account === 'mom' && f.paid_by_me, private: false, date: defaultDateFor(state.month),
   });
-  app.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => {
-    const f = list[b.dataset.pay];
-    saveEntry({ ...base(f), amount: f.amount });
+  const markPaid = async (f, amount, note) => {
+    const m = state.month;
+    if (navigator.onLine) await loadMonth(m, true); // pick up anything the other phone just marked
+    const done = fixedEntry(f, m);
+    if (done) {
+      toast(`${f.name} is already paid${done.logged_by && done.logged_by !== state.settings.name ? ` (${done.logged_by})` : ''}`);
+      render();
+      return;
+    }
+    saveEntry({ ...base(f), id: fixedId(f, m), amount, note: note || f.name });
     toast(`${f.name} marked paid`);
     render();
+  };
+  app.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => {
+    b.disabled = true;
+    const f = list[b.dataset.pay];
+    markPaid(f, f.amount);
   });
   app.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
     const f = list[b.dataset.idx];
@@ -802,9 +825,8 @@ function bindFixed() {
     const f = list[b.dataset.payUnit];
     const n = store.get(KEYS.counts, {})[f.name] ?? 30;
     if (!n) { toast(`Set the number of ${f.unit || 'units'} first`); return; }
-    saveEntry({ ...base(f), amount: n * f.per_unit, note: `${f.name}: ${n} ${f.unit || 'units'} × ${f.per_unit}` });
-    toast(`${f.name} marked paid`);
-    render();
+    b.disabled = true;
+    markPaid(f, n * f.per_unit, `${f.name}: ${n} ${f.unit || 'units'} × ${f.per_unit}`);
   });
   app.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => {
     const f = list[b.dataset.ask];
@@ -1042,6 +1064,9 @@ window.addEventListener('hashchange', () => {
   showAllCats = false;
   render();
   window.scrollTo(0, 0);
+  if (state.settings && navigator.onLine && route() !== 'add' && Date.now() - (loadedAt[state.month] || 0) > 20000) {
+    loadMonth(state.month, true);
+  }
 });
 window.addEventListener('online', () => { state.lastError = ''; flush(); loadMonth(state.month, true); });
 window.addEventListener('offline', renderSync);
