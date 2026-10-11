@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v2.3';
+const APP_VERSION = 'v2.4';
 
 // ---------- storage ----------
 
@@ -33,6 +33,7 @@ const state = {
   momRange: 1,
   pending: null, // Dad's chat message waiting for a category
   chatText: '',
+  listPot: 'team', // which kanaku the Mom's-money list shows
 };
 let draft = null;
 let showAllCats = false;
@@ -837,37 +838,84 @@ function bindFixed() {
 
 // ---------- views: list ----------
 
+function listSummary(account, pot, list, cat) {
+  const stat = (lab, v, cls = '') => `<div class="stat"><span class="label">${lab}</span><strong class="${cls}">${v}</strong></div>`;
+  if (cat) {
+    const total = list.reduce((s, e) => s + (e.type === 'out' ? Number(e.amount) : 0), 0);
+    return `<div class="stats one">${stat(`${list.length} payment${list.length === 1 ? '' : 's'}`, money(total))}</div>`;
+  }
+  if (account === 'us') {
+    const s = usSummary(state.month);
+    return `<div class="stats three">${stat('Income', money(s.received))}${stat('Spent', money(s.spent))}${stat('Saved', money(s.saved))}</div>`;
+  }
+  if (pot === 'mom') {
+    const spent = list.reduce((s, e) => s + (e.type === 'out' ? Number(e.amount) : 0), 0);
+    return `<div class="stats one">${stat('Amma spent herself', money(spent))}</div>
+      <p class="label">Amma's own payments. They don't change anyone's balance.</p>`;
+  }
+  const s = potSummary(pot, state.month);
+  const them = pot === 'dad' ? 'Appa' : 'you';
+  const leftLabel = s.left < 0 ? (pot === 'dad' ? 'Owed to Appa' : 'Mom owes you') : (pot === 'dad' ? 'With Appa' : 'Left');
+  return `<div class="stats three">
+      ${stat('From Mom', money(s.received))}
+      ${stat('Spent', money(s.spent))}
+      ${stat(leftLabel, money(s.left), s.left < 0 ? 'neg' : '')}
+    </div>
+    ${s.carry || s.covered ? `<p class="label">${[
+      s.carry ? `Includes ${s.carry < 0 ? '−' : ''}${money(s.carry)} brought forward from last month` : '',
+      s.covered ? `${them === 'you' ? 'You' : 'Appa'} also paid ${money(s.covered)} yourselves, not charged to Mom` : '',
+    ].filter(Boolean).join('. ')}.</p>` : ''}`;
+}
+
 function viewList() {
   const p = params();
   const account = isTeam() ? state.account : 'mom';
+  const showPots = account === 'mom' && !p.cat && role() !== 'dad';
+  const pot = showPots ? state.listPot : null;
   let list = monthData(state.month).entries.filter(e => e.account === account);
   if (p.cat) list = list.filter(e => e.category === p.cat);
-  const received = list.filter(e => e.type === 'in').reduce((s, e) => s + Number(e.amount), 0);
-  const spent = list.filter(e => e.type === 'out').reduce((s, e) => s + Number(e.amount), 0);
-  const who = { team: 'Hari and Harini', dad: 'Appa', mom: 'Amma' };
-  const rows = list.map(e => `
-    <button class="item" data-edit="${esc(e.id)}">
-      <span class="grow">
-        <span class="title">${esc(label(e))}${e.note ? ' · ' + esc(e.note) : ''}${e.paid_by_me ? '<span class="badge me">on us</span>' : ''}${e.private ? '<span class="badge priv">private</span>' : ''}${state.queue.some(q => q.id === e.id) ? '<span class="badge">waiting</span>' : ''}</span>
-        <span class="sub">${dayLabel(e.date)} · ${e.mode === 'cash' ? 'Cash' : 'UPI'} · ${esc(e.logged_by || who[e.pot] || '')}</span>
-      </span>
+  if (pot) list = list.filter(e => (e.pot || 'team') === pot);
+  const me = state.settings.name;
+
+  const groups = [];
+  list.forEach(e => {
+    const g = groups[groups.length - 1];
+    if (g && g.date === e.date) g.items.push(e); else groups.push({ date: e.date, items: [e] });
+  });
+  const row = e => {
+    const what = e.note || e.sub || e.category;
+    const kind = e.type === 'in' ? 'Received' : [e.category, e.sub].filter(x => x && x !== what).join(' · ');
+    const showWho = e.logged_by && e.logged_by !== me && pot !== 'dad' && pot !== 'mom'; // those tabs are one person's anyway
+    const meta = [kind, showWho ? e.logged_by : '', e.mode === 'cash' ? 'Cash' : ''].filter(Boolean).join(' · ');
+    const tags = [
+      e.paid_by_me ? '<span class="tag me">paid by us</span>' : '',
+      e.private ? '<span class="tag">private</span>' : '',
+      state.queue.some(q => q.id === e.id) ? '<span class="tag warn">waiting</span>' : '',
+    ].join('');
+    return `<button class="item" data-edit="${esc(e.id)}">
+      <span class="grow"><span class="title">${esc(what)}</span>${meta || tags ? `<span class="sub">${esc(meta)}${tags}</span>` : ''}</span>
       <span class="amt ${e.type === 'in' ? 'in' : ''}">${e.type === 'in' ? '+' : ''}${money(e.amount)}</span>
-    </button>`).join('');
-  const title = p.cat ? esc(p.cat) : account === 'mom' ? 'Mom' : 'Us';
+    </button>`;
+  };
+  const body = groups.map(g => `<p class="day">${dayLabel(g.date)}</p>${g.items.map(row).join('')}`).join('');
+  const title = p.cat ? esc(p.cat) : account === 'mom' ? "Mom's money" : 'Us';
   return `
     <div class="bar"><button class="icon-btn" data-back aria-label="Back">←</button><h1>${title}</h1></div>
     ${p.cat ? '' : accountSwitch()}
     ${monthNav()}
-    <div class="stats">
-      <div class="stat"><span class="label">Received</span><strong>${money(received)}</strong></div>
-      <div class="stat"><span class="label">Spent</span><strong>${money(spent)}</strong></div>
-    </div>
-    <div class="list">${rows || '<p class="empty-state">No entries this month yet.</p>'}</div>
+    ${showPots ? `<div class="row-chips" role="group" aria-label="Whose kanaku">
+      <button class="chip" data-pot="team" aria-pressed="${pot === 'team'}">You two</button>
+      <button class="chip" data-pot="dad" aria-pressed="${pot === 'dad'}">Appa</button>
+      <button class="chip" data-pot="mom" aria-pressed="${pot === 'mom'}">Amma</button>
+    </div>` : ''}
+    ${listSummary(account, pot, list, p.cat)}
+    <div class="list">${body || '<p class="empty-state">No entries this month yet.</p>'}</div>
     ${syncLine()}`;
 }
 
 function bindList() {
   const me = state.settings.name;
+  document.querySelectorAll('[data-pot]').forEach(b => b.onclick = () => { state.listPot = b.dataset.pot; render(); });
   document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
     const e = findEntry(b.dataset.edit);
     const mine = e && (e.logged_by === me || role() === 'admin' || (role() === 'team' && e.pot !== 'dad' && e.pot !== 'mom'));
