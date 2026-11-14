@@ -323,15 +323,26 @@ function reconcile(M, file) {
   if ([ci, ca, cd, ct].some(i => i < 0)) die('CSV needs columns: date (YYYY-MM-DD), amount, description, type (dr/cr)');
   const who = arg('who');
   const pool = data.entries.filter(e => e.date.slice(0, 7) === M && e.mode !== 'cash' && (!who || e.logged_by === who));
-  const used = new Set();
   const days = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
-  const unmatched = [];
-  rows.forEach(r => {
-    const date = r[ci].trim(), amount = Number(String(r[ca]).replace(/[,₹\s]/g, '')), type = r[ct].trim().toLowerCase().startsWith('c') ? 'in' : 'out';
-    if (!date.startsWith(M) || !(amount > 0)) return;
-    const hit = pool.find(e => !used.has(e.id) && e.type === type && Math.abs(Number(e.amount) - amount) < 1 && days(e.date, date) <= 3);
-    if (hit) used.add(hit.id); else unmatched.push({ date, amount, type, description: r[cd].trim() });
-  });
+  const words = t => new Set(String(t).toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3));
+  const stmt = rows.map(r => ({
+    date: r[ci].trim(), amount: Number(String(r[ca]).replace(/[,₹\s]/g, '')),
+    type: r[ct].trim().toLowerCase().startsWith('c') ? 'in' : 'out', description: r[cd].trim(),
+  })).filter(x => x.date.startsWith(M) && x.amount > 0);
+  // Score every plausible pair, then assign best-first: closest date wins, shared words (payee vs note) break ties.
+  const pairs = [];
+  stmt.forEach((x, si) => pool.forEach(e => {
+    if (e.type !== x.type || Math.abs(Number(e.amount) - x.amount) >= 1) return;
+    const dd = days(e.date, x.date);
+    if (dd > 3) return;
+    const ew = words(`${e.note} ${e.category} ${e.sub}`);
+    const shared = [...words(x.description)].filter(w => ew.has(w)).length;
+    pairs.push({ si, id: e.id, score: dd - shared * 2 });
+  }));
+  pairs.sort((a, b) => a.score - b.score);
+  const used = new Set(), takenStmt = new Set();
+  pairs.forEach(p => { if (!used.has(p.id) && !takenStmt.has(p.si)) { used.add(p.id); takenStmt.add(p.si); } });
+  const unmatched = stmt.filter((x, si) => !takenStmt.has(si));
   const notInStatement = pool.filter(e => !used.has(e.id));
   const out = { month: M, statement: path.basename(file), matched: used.size, unmatched_statement: unmatched, logged_not_in_statement: notInStatement.map(e => ({ date: e.date, amount: e.amount, what: e.note || e.sub || e.category, logged_by: e.logged_by })) };
   fs.writeFileSync(path.join(outDir(M), `reconcile-${path.basename(file, '.csv')}.json`), JSON.stringify(out, null, 2));

@@ -21,7 +21,7 @@
  * Actions: join (no key), config, list, save, members, invite, remove, archive_all
  */
 
-const SCHEMA = '4';
+const SCHEMA = '6';
 const TAB = { tx: 'Transactions', users: 'Users', cats: 'Categories', fixed: 'Fixed', archive: 'Archive', summaries: 'Summaries' };
 const SUMMARY_COLS = ['month', 'for_month', 'data', 'published_at', 'published_by'];
 const TX_COLS = ['id', 'date', 'account', 'type', 'amount', 'category', 'note', 'mode',
@@ -87,6 +87,18 @@ function ensureSchema_(force) {
 
     sheet_(ss, TAB.archive, TX_COLS);
     sheet_(ss, TAB.summaries, SUMMARY_COLS);
+
+    // v6: Orphanage isn't a monthly payment, so drop it from Us fixed payments (Hari, Nov 2026)
+    const fixedVals = fixed.getDataRange().getValues();
+    for (let i = fixedVals.length - 1; i > 0; i--) {
+      if (fixedVals[i][0] === 'us' && fixedVals[i][1] === 'Orphanage') fixed.deleteRows(i + 1, 1);
+    }
+
+    // v5: gifts and functions for Us (weddings, festivals), usually one-offs
+    if (!rows_(cats).some(r => r.account === 'us' && r.type === 'out' && r.name === 'Gifts and functions')) {
+      cats.getRange(cats.getLastRow() + 1, 1, 1, CAT_COLS.length)
+        .setValues([['us', 'out', 'Gifts and functions', '', 'Wedding, Festival, Birthday, Other', '', 'Weddings, festivals, birthdays']]);
+    }
 
     // v4: "typical" column on Fixed, so the monthly estimate has sensible numbers before any history exists
     if (fixed.getRange(1, 10).getValues()[0][0] !== 'typical') {
@@ -178,7 +190,6 @@ function seedFixed_() {
     ['us', 'Patti Thatha Athai', 'Family support', 'Patti Thatha Athai', 4000, '', '', 'all', '', ''],
     ['us', 'Meera Patti', 'Family support', 'Meera Patti', 1000, '', '', 'all', '', ''],
     ['us', 'Mission', 'Giving', 'Mission', 1000, '', '', 'all', '', ''],
-    ['us', 'Orphanage', 'Giving', 'Orphanage', 1500, '', '', 'all', '', ''],
     ['us', 'Wi-Fi', 'Bills', 'Wi-Fi', 1200, '', '', 'all', '', ''],
     ['us', 'Mobile recharge', 'Bills', 'Mobile', 2500, '', '', 'all', '', ''],
     ['us', 'Subscriptions', 'Subscriptions', '', 5230, '', '', 'all', '', ''],
