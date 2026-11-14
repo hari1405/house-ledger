@@ -21,7 +21,7 @@
  * Actions: join (no key), config, list, save, members, invite, remove, archive_all
  */
 
-const SCHEMA = '6';
+const SCHEMA = '7';
 const TAB = { tx: 'Transactions', users: 'Users', cats: 'Categories', fixed: 'Fixed', archive: 'Archive', summaries: 'Summaries' };
 const SUMMARY_COLS = ['month', 'for_month', 'data', 'published_at', 'published_by'];
 const TX_COLS = ['id', 'date', 'account', 'type', 'amount', 'category', 'note', 'mode',
@@ -87,6 +87,12 @@ function ensureSchema_(force) {
 
     sheet_(ss, TAB.archive, TX_COLS);
     sheet_(ss, TAB.summaries, SUMMARY_COLS);
+
+    // v7: Harini is a homemaker, so Us income has no "Salary Harini" tile
+    const catVals = cats.getDataRange().getValues();
+    for (let i = catVals.length - 1; i > 0; i--) {
+      if (catVals[i][0] === 'us' && catVals[i][1] === 'in' && catVals[i][2] === 'Salary Harini') cats.deleteRows(i + 1, 1);
+    }
 
     // v6: Orphanage isn't a monthly payment, so drop it from Us fixed payments (Hari, Nov 2026)
     const fixedVals = fixed.getDataRange().getValues();
@@ -164,7 +170,7 @@ function seedCategories_() {
     ['Savings and insurance', 0, ['RD Harini', 'RD Hari', 'LIC Hari', 'LIC Harini', 'Investment'], 0, 'Counted as saved, not spent'],
     ['Other', 0, [], 0, ''],
   ]);
-  add('us', 'in', [['Salary Hari', 1], ['Salary Harini', 1], ['Other', 1]]);
+  add('us', 'in', [['Salary Hari', 1], ['Other', 1]]);
   return rows;
 }
 
